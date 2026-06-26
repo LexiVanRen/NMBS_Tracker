@@ -3,6 +3,7 @@ import sys
 from datetime import datetime
 
 import requests
+from plyer import notification
 # After
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QPixmap, QIcon
@@ -44,7 +45,7 @@ class FetchWorker(QObject):
             response = requests.get(API_URL, params=params, timeout=12)
             response.raise_for_status()
             data = response.json()
-            print(json.dumps(data, indent=3))
+            #print(json.dumps(data, indent=3))
 
             rows = []
             for conn in data.get("connection", []):
@@ -208,7 +209,7 @@ class TrainCard(QFrame):
         arrow_lbl = QLabel("→")
         arrow_lbl.setAlignment(Qt.AlignCenter)
         arrow_lbl.setStyleSheet(
-            f"font-size: 22px; font-weight: 900; color: #ffffff; font-family: 'Segoe UI';"
+            f"font-size: 35px; font-weight: 900; color: #ffffff; font-family: 'Segoe UI';"
         )
         times_row.addWidget(arrow_lbl)
 
@@ -292,11 +293,89 @@ class App(QWidget):
         scroll.setWidget(cards_container)
         self.layout.addWidget(scroll)
 
+        # key: planned time  →  {"delay": int, "canceled": bool}
+        self._prev_state: dict = {}
+        """
+        self._prev_state = {
+            "16:38": {"delay": 0, "canceled": False},
+            "16:53": {"delay": 2, "canceled": False},
+            "17:37": {"delay": 0, "canceled": True},
+        }
+        """
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.fetch_data)
         self.timer.start(60_000)
 
         self.fetch_data()
+
+    def _notify(self, title: str, message: str):
+        """Fire a system notification (best-effort; silently ignored if unsupported)."""
+        try:
+            notification.notify(
+                title=title,
+                message=message,
+                app_name="NMBS Monitor",
+                timeout=6,
+            )
+        except Exception:
+            pass
+
+    def _check_changes(self, rows: list):
+        """Diff new rows against previous state and fire notifications for changes."""
+        new_state = {r["planned"]: {"delay": r["delay"], "canceled": r["canceled"]} for r in rows}
+
+        for planned, new in new_state.items():
+            prev = self._prev_state.get(planned)
+
+
+            if prev is None:
+                # First fetch — establish baseline silently
+                continue
+
+            was_canceled = prev["canceled"]
+            is_canceled  = new["canceled"]
+            prev_delay   = prev["delay"]
+            new_delay    = new["delay"]
+
+            if not was_canceled and is_canceled:
+                self._notify(
+                    f"🚫 {planned} AFGELAST",
+                    f"De trein van {planned} naar Gent-Sint-Pieters is afgelast.",
+                )
+            elif was_canceled and not is_canceled:
+                if new_delay > 0:
+                    self._notify(
+                        f"✅ {planned} terug in dienst (⚠️+{new_delay} min)",
+                        f"De trein van {planned} rijdt weer, maar heeft {new_delay} min vertraging.",
+                    )
+                else:
+                    self._notify(
+                        f"✅ {planned} terug in dienst",
+                        f"De trein van {planned} naar Gent-Sint-Pieters rijdt weer op tijd.",
+                    )
+            elif not is_canceled and prev_delay != new_delay:
+                if new_delay == 0:
+                    self._notify(
+                        f"✅ {planned} op tijd",
+                        f"De trein van {planned} heeft geen vertraging meer.",
+                    )
+                elif prev_delay == 0:
+                    self._notify(
+                        f"⚠️ {planned} +{new_delay} min vertraging",
+                        f"De trein van {planned} heeft nu {new_delay} min vertraging.",
+                    )
+                elif new_delay > prev_delay:
+                    self._notify(
+                        f"⚠️ {planned} vertraging toegenomen",
+                        f"Vertraging gestegen van {prev_delay} naar {new_delay} min.",
+                    )
+                else:
+                    self._notify(
+                        f"⚠️ {planned} vertraging gedaald",
+                        f"Vertraging gedaald van {prev_delay} naar {new_delay} min.",
+                    )
+
+        self._prev_state = new_state
 
     def _tick_clock(self):
         self.clock_lbl.setText(datetime.now().strftime("%H:%M:%S"))
@@ -324,6 +403,7 @@ class App(QWidget):
 
     def update_ui(self, rows, timestamp):
         self.clear_cards()
+        self._check_changes(rows)
         self.updated.setText(f"Laatst bijgewerkt om {timestamp}")
 
         if not rows:
