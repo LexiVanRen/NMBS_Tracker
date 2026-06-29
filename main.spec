@@ -22,7 +22,7 @@ def collect_folder(folder_name):
 
 a = Analysis(
     ['main.py'],
-    pathex=['C:\\Users\\lexiv\\Documents\\GitHub\\NMBS_Tracker'],
+    pathex=['C:\\Users\\ABC-RnD\\Documents\\GitHub\\NMBS_Tracker'],
     datas=[
         ('inno_setup_script_for_making_installer.iss', '.'),
     ] + collect_folder('assets'),
@@ -43,7 +43,7 @@ exe = EXE(
     a.binaries,
     a.zipfiles,
     a.datas,
-    name='Codex Encoder Fixer',
+    name='NMBS Tracker',
     debug=False,
     strip=False,
     onefile=False,

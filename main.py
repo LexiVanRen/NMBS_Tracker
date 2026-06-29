@@ -222,7 +222,7 @@ class App(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("NMBS Monitor: Deinze → Gent-Sint-Pieters")
-        self.resize(720, 600)
+        self.resize(720, 620)
         self.setWindowIcon(QIcon("assets/nmbs.ico"))
         self.setStyleSheet(
             """

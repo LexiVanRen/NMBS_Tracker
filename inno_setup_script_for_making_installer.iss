@@ -4,6 +4,7 @@
 #define MyAppName "NMBS Tracker"
 #define MyAppPublisher "Lexi"
 #define MyAppVersion "0.9.0"
+#define MyAppURL "www.lexivanrentergem.be"
 #define MyAppExeName "NMBS Tracker.exe"
 
 
